@@ -1,2 +1,0 @@
-"/usr/bin/gcc-ar-13" cr libfbpdr.a CMakeFiles/fbpdr.dir/Model.cpp.o CMakeFiles/fbpdr.dir/IC3.cpp.o CMakeFiles/fbpdr.dir/aiger/aiger.c.o
-"/usr/bin/gcc-ranlib-13" libfbpdr.a

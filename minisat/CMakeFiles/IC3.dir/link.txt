@@ -1,1 +1,0 @@
-g++ -O3 -DNDEBUG -flto=auto -fno-fat-lto-objects CMakeFiles/IC3.dir/main.cpp.o -o IC3  libfbpdr.a -lz build/libminisat.a 
