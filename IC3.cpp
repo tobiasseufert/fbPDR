@@ -100,11 +100,6 @@ public:
 		{
 			lifts = model.newSolver();
 			// don't assert primed invariant constraints
-#ifdef USE_IGBG
-			model.loadTransitionRelationImplgraph(*lifts);
-			for (int var = 0; var < lifts->nVars(); ++var)
-				lifts->setDecisionVar(var, false); //no decisions
-#else
 			model.loadTransitionRelation(*lifts, false);
 			// assert notInvConstraints (in stateOf) when lifting
 			notInvConstraints = Minisat::mkLit(lifts->newVar());
@@ -115,7 +110,6 @@ public:
 					i != model.invariantConstraints().end(); ++i)
 				cls.push(model.primeLit(~*i));
 			lifts->addClause_(cls);
-#endif
 		}
 	}
 	~IC3()
@@ -267,22 +261,6 @@ private:
 	};
 	typedef std::set<SupportVar, SuppVarComp> SvPrioQueue;
 
-	struct valOcc
-	{
-		float one = 0.001;
-		float zero = 0.001;
-
-		valOcc() :
-				one(0.001), zero(0.001)
-		{
-		}
-	};
-	typedef vector<valOcc> valOccVec;
-
-	//vector holding the number of occurences of the polarities
-	//of each input variable
-	valOccVec inputValOcc;
-
 	class ReverseVarComp
 	{
 	public:
@@ -290,8 +268,6 @@ private:
 		{
 			if (v1 > v2)
 				return true;
-			if (v1 <= v2)
-				return false;
 			return false;
 		}
 	};
@@ -304,8 +280,6 @@ private:
 	std::vector<unsigned int> stateVarsWithDisjSupp;
 	//ordered out degrees of support variables (of transition functions)
 	SvPrioQueue orderedSuppDegr;
-	//stores for each latch: exclusive variables / (exclusive variables + shared variables)
-	std::vector<float> exclSharedQuotient;
 
 	string stringOfLitVec(const LitVec &vec)
 	{
@@ -616,143 +590,6 @@ private:
 		return st;
 	}
 
-#ifdef USE_IGBG
-	// Assumes that last call to fr.consecution->solve() was
-	// satisfiable.  Extracts state(s) cube from satisfying
-	// assignment.
-	size_t stateOfImplicationGraph(Frame &fr, size_t succ = 0, bool noCTG = false)
-	{
-		// create state
-		size_t st = newState();
-		state(st).successor = succ;
-		MSLitVec assumps;
-		assumps.capacity(
-				2 * (model.endInputs() - model.beginInputs())
-						+ (model.endLatches() - model.beginLatches()));
-
-		// extract and assert primary inputs
-		for (VarVec::const_iterator i = model.beginInputs();
-				i != model.endInputs(); ++i)
-		{
-			Minisat::lbool val = consecSolver->modelValue(i->var());
-			if (val != Minisat::l_Undef)
-			{
-				Minisat::Lit pi = i->lit(val == Minisat::l_False);
-				state(st).inputs.push_back(pi);  // record full inputs
-				assumps.push(pi);
-			}
-			// some properties include inputs, so assert primed inputs after
-			Minisat::lbool pval = consecSolver->modelValue(
-					model.primeVar(*i).var());
-			if (pval != Minisat::l_Undef)
-				assumps.push(model.primeLit(i->lit(pval == Minisat::l_False)));
-			if(succ == 0) //store inputs that lead to final bad state
-				currBadInput.push_back(i->lit(pval == Minisat::l_False));
-		}
-
-		// extract and assert latches
-		LitVec latches;
-		LitVec platches;
-		for (VarVec::const_iterator i = model.beginLatches();
-				i != model.endLatches(); ++i)
-		{
-			Minisat::lbool val = consecSolver->modelValue(i->var());
-			if (val != Minisat::l_Undef)
-			{
-				Minisat::Lit la = i->lit(val == Minisat::l_False);
-				latches.push_back(la);
-				assumps.push(la);
-			}
-		}
-
-		// Literals sufficient for implying the next state reveal a lifting of the present state.
-		++nQuery;
-		startTimer();  // stats
-		bool rv = lifts->solve(assumps);
-		endTimer(satTime);
-		assert(rv);
-
-		//only BCP should have been used here
-		LitSet reasons;
-		std::vector<bool> processed(lifts->nVars() + 1, false);
-		set<Minisat::Var, ReverseVarComp> pending;
-
-		pending.insert(Minisat::var(model.error()));
-		if (!model.invariantConstraints().empty()) //AIGER 1.9
-		{
-			for (vector<Minisat::Lit>::const_iterator c =
-					model.invariantConstraints().begin();
-					c != model.invariantConstraints().end(); ++c)
-			{
-				pending.insert(Minisat::var(*c));
-				//if(succ == 0) //only required for "target enlargement"
-				pending.insert(Minisat::var(model.primeLit(*c)));
-			}
-		}
-		if (succ == 0)
-		{
-			pending.insert(Minisat::var(model.primedError()));
-		}
-		else
-		{
-			for (vector<Minisat::Lit>::const_iterator i =
-					state(succ).latches.begin(); i != state(succ).latches.end();
-					++i)
-			{
-				pending.insert(Minisat::var(model.primeLit(*i)));
-			}
-		}
-		while (pending.size() > 0)
-		{
-			Minisat::Var var = *pending.begin();
-			Minisat::CRef clRef = lifts->reason(var);
-			if (!processed[var])
-			{
-				processed[var] = true;
-				if (clRef != Minisat::CRef_Undef)
-				{
-					const Minisat::Clause &cl = lifts->ca[clRef];
-					pending.erase(pending.begin());
-					for (int j = 0; j < cl.size(); ++j)
-					{
-						if (Minisat::var(cl[j]) >= model.beginLatches()->var()
-								&& Minisat::var(cl[j])
-										< model.endLatches()->var())
-							reasons.insert(cl[j]);
-						else
-						{
-							if (Minisat::var(cl[j]) >= model.endLatches()->var()
-									&& Minisat::var(cl[j]) != var
-									&& (Minisat::var(cl[j])
-											>= model.primeVar(
-													*model.endInputs()).var()
-											|| Minisat::var(cl[j])
-													< model.primeVar(
-															*model.beginInputs()).var())) //ignore itself
-								pending.insert(Minisat::var(cl[j]));
-						}
-					}
-				}
-				else
-					pending.erase(pending.begin());
-			}
-			else
-				pending.erase(pending.begin());
-		}
-
-		for (auto &lit : latches)
-		{
-			if (reasons.find(lit) != reasons.end()
-					|| reasons.find(~lit) != reasons.end())
-			{
-				state(st).latches.push_back(lit);
-			}
-		}
-
-		return st;
-	}
-#endif
-
 	// Assumes that last call to fr.consecution->solve() was
 	// satisfiable.  Extracts state(s) cube from satisfying
 	// assignment. Reverse: No Lifting
@@ -944,11 +781,7 @@ private:
 			{
 				if (!revpdr)
 				{
-#ifdef USE_IGBG
-					*pred = stateOfImplicationGraph(fr, succ, noCTG);
-#else
 					*pred = stateOf(fr, succ, noCTG);
-#endif
 				}
 				else
 					*pred = stateOfReverse(fr, succ);
@@ -1351,15 +1184,7 @@ private:
 			PriorityQueue pq;
 			// enqueue main obligation and handle
 			if (!revpdr)
-			{
-#ifdef USE_IGBG
-				pq.insert(
-						Obligation(
-								stateOfImplicationGraph(frontier, 0, true), k - 1, 1));
-#else
 				pq.insert(Obligation(stateOf(frontier, 0, true), k - 1, 1));
-#endif
-			}
 			else
 				pq.insert(Obligation(stateOfReverse(frontier), k - 1, 1));
 

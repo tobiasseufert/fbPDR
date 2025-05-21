@@ -37,10 +37,6 @@ Model::~Model()
 		delete sslv;
 	if (sslvError)
 		delete sslvError;
-#ifdef USE_IGBG
-	if (sslvImplgraph)
-		delete sslvImplgraph;
-#endif
 }
 
 const Var& Model::primeVar(const Var &v, Minisat::SimpSolver *slv)
@@ -331,110 +327,6 @@ void Model::loadTransitionRelationConsec(Minisat::Solver &slv)
 			i != constraints.end(); ++i)
 		slv.addClause(primeLit(*i), ~transActLit);
 }
-
-#ifdef USE_IGBG
-void Model::loadTransitionRelationImplgraph(Minisat::Solver &slv)
-{
-	if (!sslvImplgraph)
-	{
-		// create a simplified CNF version of (this slice of) the TR
-		sslvImplgraph = new Minisat::SimpSolver();
-		// introduce all variables to maintain alignment
-		for (size_t i = 0; i < vars.size(); ++i)
-		{
-			Minisat::Var nv = sslvImplgraph->newVar();
-			assert(nv == vars[i].var());
-		}
-		// freeze inputs, latches, and special nodes (and primed forms)
-		for (VarVec::const_iterator i = beginInputs(); i != endInputs(); ++i)
-		{
-			sslvImplgraph->setFrozen(i->var(), true);
-			sslvImplgraph->setFrozen(primeVar(*i).var(), true);
-		}
-		for (VarVec::const_iterator i = beginLatches(); i != endLatches(); ++i)
-		{
-			sslvImplgraph->setFrozen(i->var(), true);
-			sslvImplgraph->setFrozen(primeVar(*i).var(), true);
-		}
-		sslvImplgraph->setFrozen(varOfLit(error()).var(), true);
-		sslvImplgraph->setFrozen(varOfLit(primedError()).var(), true);
-		for (vector<Minisat::Lit>::const_iterator i = constraints.begin();
-				i != constraints.end(); ++i)
-		{
-			Var v = varOfLit(*i);
-			sslvImplgraph->setFrozen(v.var(), true);
-			sslvImplgraph->setFrozen(primeVar(v).var(), true);
-		}
-		// initialize with roots of required formulas
-		LitSet require;  // unprimed formulas
-		for (VarVec::const_iterator i = beginLatches(); i != endLatches(); ++i)
-			require.insert(nextStateFn(*i));
-		require.insert(_error);
-		require.insert(constraints.begin(), constraints.end());
-		LitSet prequire; // for primed formulas; always subset of require
-		prequire.insert(_error);
-		prequire.insert(constraints.begin(), constraints.end());
-
-		// traverse AIG backward
-		for (AigVec::const_reverse_iterator i = aig.rbegin(); i != aig.rend();
-				++i)
-		{
-			// skip if this row is not required
-			if (require.find(i->lhs) == require.end()
-					&& require.find(~i->lhs) == require.end())
-				continue;
-			// encode into CNF
-			sslvImplgraph->addClause(~i->lhs, i->rhs0);
-			sslvImplgraph->addClause(~i->lhs, i->rhs1);
-			sslvImplgraph->addClause(~i->rhs0, ~i->rhs1, i->lhs);
-			// require arguments
-			require.insert(i->rhs0);
-			require.insert(i->rhs1);
-			// primed: skip if not required
-			if (prequire.find(i->lhs) == prequire.end()
-					&& prequire.find(~i->lhs) == prequire.end())
-				continue;
-			// encode PRIMED form into CNF
-			Minisat::Lit r0 = primeLit(i->lhs, sslvImplgraph), r1 = primeLit(i->rhs0,
-					sslvImplgraph), r2 = primeLit(i->rhs1, sslvImplgraph);
-			sslvImplgraph->addClause(~r0, r1);
-			sslvImplgraph->addClause(~r0, r2);
-			sslvImplgraph->addClause(~r1, ~r2, r0);
-			// require arguments
-			prequire.insert(i->rhs0);
-			prequire.insert(i->rhs1);
-		}
-		sslvImplgraph->addClause(btrue());
-		sslvImplgraph->addClause(~_error);
-		// assert literal for true
-
-		// assert l' = f for each latch l
-		for (VarVec::const_iterator i = beginLatches(); i != endLatches(); ++i)
-		{
-			Minisat::Lit platch = primeLit(i->lit(false)), f = nextStateFn(*i);
-			sslvImplgraph->addClause(~platch, f);
-			sslvImplgraph->addClause(~f, platch);
-		}
-		sslvImplgraph->eliminate(true);
-	}
-	// load the clauses from the simplified context
-	assert(sslvImplgraph->nVars() == vars.size());
-	while (slv.nVars() < sslvImplgraph->nVars())
-		slv.newVar();
-	for (Minisat::ClauseIterator c = sslvImplgraph->clausesBegin();
-			c != sslvImplgraph->clausesEnd(); ++c)
-	{
-		const Minisat::Clause &cls = *c;
-		Minisat::vec<Minisat::Lit> cls_;
-		for (int i = 0; i < cls.size(); ++i)
-			cls_.push(cls[i]);
-		slv.addClause_(cls_);
-	}
-	for (Minisat::TrailIterator c = sslvImplgraph->trailBegin(); c != sslvImplgraph->trailEnd();
-			++c)
-		slv.addClause(*c);
-}
-#endif
 
 void Model::loadInitialCondition(Minisat::Solver &slv, Minisat::Lit actLit) const
 {

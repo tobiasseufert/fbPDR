@@ -24,8 +24,6 @@
 #ifndef CONFIG_H_INCLUDED
 #define CONFIG_H_INCLUDED
 
-/* Lifting */
-//#define USE_IGBG
 /* Reverse PDR */
 //#define revpogen
 /* fbPDR functionality */

@@ -323,9 +323,6 @@ public:
 					_vars.size()), primesUnlocked(true), aig(_aig), init(_init), constraints(
 					_constraints), nextStateFns(_nextStateFns), _error(_err), inits(
 			NULL), sslv(NULL), sslvConsec(NULL), sslvError(NULL), transActLit(Minisat::mkLit(0,false))
-#ifdef USE_IGBG
-					, sslvImplgraph(NULL)
-#endif
 	{
 		// create primed inputs and latches in known region of vars
 		for (size_t i = inputs; i < reps; ++i)
@@ -446,6 +443,23 @@ public:
 		return aig.end();
 	}
 
+	bool isLatch(Minisat::Var v) const
+	{
+		return (v >= latches && v < reps);
+	}
+	bool isInput(Minisat::Var v) const
+	{
+		return (v >= inputs && v < latches);
+	}
+	bool isAnd(Minisat::Var v) const
+	{
+		return (v >= reps && v < primes);
+	}
+	bool isPrimed(Minisat::Var v) const
+	{
+		return (v >= primes && v < primes + reps - inputs);
+	}
+
 	// Next-state function for given latch.
 	Minisat::Lit nextStateFn(const Var &latch) const
 	{
@@ -501,8 +515,6 @@ public:
 	//trans with activation literal
 	void loadTransitionRelationConsec(Minisat::Solver &slv);
 	Minisat::Lit getTransActLit() { assert(Minisat::toInt(transActLit) != 0); return transActLit; }
-	//without constraints etc. possibility to remove P constraint
-	void loadTransitionRelationImplgraph(Minisat::Solver &slv);
 
 	// Loads the initial condition into the solver.
 	void loadInitialCondition(Minisat::Solver &slv, Minisat::Lit actLit =
@@ -565,7 +577,6 @@ private:
 	Minisat::SimpSolver *sslv;
 	Minisat::SimpSolver *sslvConsec;
 	Minisat::SimpSolver *sslvError;
-	Minisat::SimpSolver *sslvImplgraph;
 
 	//stores for each variable (node/latch/input) its successors in latch transition function
 	std::vector<std::set<unsigned int>> circuitNodeSuccessors;
