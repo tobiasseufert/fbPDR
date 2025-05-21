@@ -3,7 +3,7 @@
 Forward / backward PDR/IC3 implementation. From our paper "fbPDR: In-depth combination of forward and backward analysis in Property Directed Reachability" (DATE, 2019).
 Based on IC3ref (https://github.com/arbrad/IC3ref).
 
-The tool will output a certifaiger certificate or an aigsim witness.
+The tool will output a certifaiger (https://github.com/Froleyks/certifaiger)  certificate or an aigsim witness.
 
 # Build instructions
 
