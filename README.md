@@ -36,5 +36,4 @@ E.g., uncommenting #define FBPDR_USE_LEMMA_SHARING in Config.h might be interest
       -b: use basic generalization
       propertyIndex: index of the property to check
       If no propertyIndex is given, the first property is used.
-      If no properties are given, the program will exit.
 
