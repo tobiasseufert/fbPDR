@@ -5,6 +5,8 @@ Based on IC3ref (https://github.com/arbrad/IC3ref).
 
 The tool will output a certifaiger (https://github.com/Froleyks/certifaiger)  certificate or an aigsim witness.
 
+*Limitations*: no preprocessing of the AIGER, only AIGER standard < 1.9
+
 # Build instructions
 
 Download z lib.
