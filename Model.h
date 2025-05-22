@@ -43,8 +43,6 @@ extern "C"
 #include "Config.h"
 
 
-// Read it and weep: yes, it's in a header file; no, I don't want to
-// have std:: all over the place.
 using namespace std;
 
 // A row of the AIGER spec: lhs = rhs0 & rhs1.
@@ -62,13 +60,13 @@ typedef vector<AigRow> AigVec;
 #if defined(FBPDR_USE_PO_INTERSECTION) || defined(FBPDR_USE_PO_INTERSECTION_SEMANTIC)
 struct LitVec
 {
-	std::vector<Minisat::Lit> literals;
+	vector<Minisat::Lit> literals;
 	bool bad;
 
 	//default constructor
 	LitVec() : literals(vector<Minisat::Lit>()), bad(false){}
 	LitVec(vector<Minisat::Lit>::const_iterator it1, vector<Minisat::Lit>::const_iterator it2) :
-		bad(false), literals(std::vector<Minisat::Lit>(it1, it2))
+		bad(false), literals(vector<Minisat::Lit>(it1, it2))
 	{	}
 
 	//copy constructor.
